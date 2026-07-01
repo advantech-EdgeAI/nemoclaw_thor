@@ -1,0 +1,43 @@
+preset:
+  name: weather-apis
+  description: "Weather API access for wttr.in, Open-Meteo, and weather.gov"
+
+network_policies:
+  weather_apis:
+    name: weather_apis
+    endpoints:
+      - host: wttr.in
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: HEAD, path: "/**" }
+      - host: api.open-meteo.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: HEAD, path: "/**" }
+      - host: geocoding-api.open-meteo.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: HEAD, path: "/**" }
+      - host: api.weather.gov
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: HEAD, path: "/**" }
+    binaries:
+      - { path: /usr/local/bin/openclaw }
+      - { path: /usr/local/bin/node }
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/curl }
+      - { path: /usr/bin/python3 }
+      - { path: /usr/local/bin/python3 }

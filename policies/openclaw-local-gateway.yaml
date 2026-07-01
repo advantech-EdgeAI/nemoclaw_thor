@@ -1,0 +1,19 @@
+preset:
+  name: openclaw-local-gateway
+  description: "Allow OpenClaw Node processes to reach the local gateway WebSocket"
+
+network_policies:
+  openclaw_local_gateway:
+    name: openclaw_local_gateway
+    endpoints:
+      - host: 172.22.0.2
+        port: 18790
+        access: full
+      - host: 92448d709d2c
+        port: 18790
+        access: full
+    binaries:
+      - { path: /usr/local/bin/openclaw }
+      - { path: /usr/local/bin/node }
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/curl }
