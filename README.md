@@ -122,6 +122,32 @@ export TELEGRAM_BOT_ID="$(curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TO
 echo "$TELEGRAM_BOT_ID"
 ```
 
+`TELEGRAM_BOT_ID` identifies the bot itself. Do not use it as the allowed user or message target.
+
+From your real Telegram account, send `/start` to the bot. Then get your human Telegram user ID.
+
+The simplest way is to ask Telegram's user-info bot:
+
+```text
+@userinfobot
+```
+
+You can also get the ID from the bot update stream:
+
+```bash
+curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates" \
+  | jq '.result[]
+        | select(.message.from.is_bot == false)
+        | .message.from
+        | {id, username, first_name}'
+```
+
+Save your human user ID:
+
+```bash
+export TELEGRAM_USER_ID='PASTE_YOUR_HUMAN_TELEGRAM_USER_ID_HERE'
+```
+
 Use a dedicated bot token for this NemoClaw sandbox. Reusing one token in multiple bot services can cause:
 
 ```text
@@ -212,6 +238,19 @@ nemoclaw "$NEMOCLAW_SANDBOX_NAME" policy-add \
 nemoclaw "$NEMOCLAW_SANDBOX_NAME" policy-list
 ```
 
+If `policy-list` still shows the built-in weather preset as disabled:
+
+```text
+○ weather — Read-only public weather, geocoding, and alert APIs
+```
+
+Enable it directly:
+
+```bash
+nemoclaw "$NEMOCLAW_SANDBOX_NAME" policy-add weather --yes
+nemoclaw "$NEMOCLAW_SANDBOX_NAME" policy-list
+```
+
 If you need to patch the gateway policy on another Thor device, edit the `host:` entries before applying:
 
 ```bash
@@ -227,6 +266,7 @@ Keep port `18790` unless your gateway logs show a different port.
 Enable the Telegram channel:
 
 ```bash
+export NEMOCLAW_OLLAMA_PROXY_TOKEN="$(cat ~/.nemoclaw/ollama-proxy-token)"
 nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels list
 nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels add telegram
 ```
@@ -234,8 +274,35 @@ nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels add telegram
 When prompted:
 
 - Use `TELEGRAM_BOT_TOKEN` for the bot token.
-- Use `TELEGRAM_BOT_ID` only if the flow asks for the bot ID.
-- Use your Telegram user, group, or channel ID if the flow asks for an allowed sender or destination ID.
+- Use `TELEGRAM_USER_ID` for `Telegram User ID (for DM access)`.
+- Use your Telegram group or channel ID only if the flow asks for a group/channel destination.
+- Do not use `TELEGRAM_BOT_ID` as an allowed sender or message target. That is the bot itself.
+
+If you leave `Telegram User ID (for DM access)` empty, the bot requires manual OpenClaw pairing before it can reply to direct messages.
+
+Pair Telegram direct messages:
+
+1. From your real Telegram account, send a message to the bot. Use `/start` or any short test message.
+2. List pending pairing requests:
+
+```bash
+nemoclaw "$NEMOCLAW_SANDBOX_NAME" exec -- \
+  openclaw pairing list --channel telegram --json
+```
+
+3. Approve the pairing code shown by the list command:
+
+```bash
+nemoclaw "$NEMOCLAW_SANDBOX_NAME" exec -- \
+  openclaw pairing approve --channel telegram PAIRING_CODE --notify
+```
+
+4. Confirm the Telegram peer is known:
+
+```bash
+nemoclaw "$NEMOCLAW_SANDBOX_NAME" exec -- \
+  openclaw directory peers list --channel telegram --json
+```
 
 For a Telegram channel or group, add the bot and make it an admin if NemoClaw needs to post messages.
 
@@ -272,8 +339,17 @@ nemoclaw "$NEMOCLAW_SANDBOX_NAME" logs --tail 200
 Telegram:
 
 - `Conflict: terminated by other getUpdates request` means another service is polling the same bot token.
+- `403: Forbidden: the bot can't send messages to the bot` means the target ID is the bot ID, not your human Telegram user ID.
 - If Telegram cannot connect, confirm the sandbox has outbound access to `api.telegram.org`.
 - If channel posting fails, confirm the bot is a member or admin of the target Telegram channel or group.
+- If direct messages do not work, set `TELEGRAM_USER_ID` during `channels add telegram` or complete the OpenClaw pairing flow.
+- If `channels add` or `channels remove` fails during rebuild with `NEMOCLAW_OLLAMA_PROXY_TOKEN` missing, export the saved local Ollama proxy token first:
+
+```bash
+export NEMOCLAW_OLLAMA_PROXY_TOKEN="$(cat ~/.nemoclaw/ollama-proxy-token)"
+nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels remove telegram
+nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels add telegram
+```
 
 References:
 
