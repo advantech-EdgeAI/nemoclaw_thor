@@ -291,6 +291,11 @@ nemoclaw "$NEMOCLAW_SANDBOX_NAME" exec -- \
 ```
 
 3. Approve the pairing code shown by the list command:
+Sequence
+> Create a Telegram bot with @BotFather
+> Copy the bot token
+> Get your personal numeric user ID from @userinfobot
+> Enter both into nemoclaw onboard
 
 ```bash
 nemoclaw "$NEMOCLAW_SANDBOX_NAME" exec -- \
