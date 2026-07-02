@@ -88,7 +88,15 @@ curl -s http://127.0.0.1:11434/api/generate \
 
 For the smaller model used in earlier tests, replace `qwen3.6:35b` with `qwen3.6:25b`.
 
-## 3. Create a Telegram Bot
+## 3. Create a Telegram Bot and get user ID
+
+The Sequence:
+```
+1. Create a Telegram bot with @BotFather
+2. Copy the bot token
+3. Get your personal numeric user ID from @userinfobot
+4. Enter both into nemoclaw onboard
+```
 
 In Telegram, open the official BotFather:
 
@@ -291,11 +299,6 @@ nemoclaw "$NEMOCLAW_SANDBOX_NAME" exec -- \
 ```
 
 3. Approve the pairing code shown by the list command:
-Sequence
-> Create a Telegram bot with @BotFather
-> Copy the bot token
-> Get your personal numeric user ID from @userinfobot
-> Enter both into nemoclaw onboard
 
 ```bash
 nemoclaw "$NEMOCLAW_SANDBOX_NAME" exec -- \
