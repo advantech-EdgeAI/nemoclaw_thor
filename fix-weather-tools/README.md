@@ -11,13 +11,13 @@ Host-side fix package for a fresh NemoClaw + Ollama + OpenClaw setup where:
 From the repository root:
 
 ```bash
-./nemoclaw_thor/fix-weather-tools/apply.sh my-assistant3
+./nemoclaw_thor/fix-weather-tools/apply.sh my-assistant
 ```
 
 Or use the environment variable:
 
 ```bash
-export NEMOCLAW_SANDBOX_NAME=my-assistant3
+export NEMOCLAW_SANDBOX_NAME=my-assistant
 ./nemoclaw_thor/fix-weather-tools/apply.sh
 ```
 
@@ -34,7 +34,7 @@ The script runs on the host. It will:
 Set `OLLAMA_MODEL` if your local model is not `qwen3.6:35b`:
 
 ```bash
-OLLAMA_MODEL=qwen3.6:25b ./nemoclaw_thor/fix-weather-tools/apply.sh my-assistant3
+OLLAMA_MODEL=qwen3.6:25b ./nemoclaw_thor/fix-weather-tools/apply.sh my-assistant
 ```
 
 ## Optional End-to-End Smoke
@@ -42,7 +42,7 @@ OLLAMA_MODEL=qwen3.6:25b ./nemoclaw_thor/fix-weather-tools/apply.sh my-assistant
 The full agent test can take a while on local models, so it is opt-in:
 
 ```bash
-RUN_AGENT_SMOKE=1 ./nemoclaw_thor/fix-weather-tools/apply.sh my-assistant3
+RUN_AGENT_SMOKE=1 ./nemoclaw_thor/fix-weather-tools/apply.sh my-assistant
 ```
 
 Expected prompt result: the assistant fetches live Taipei weather from Open-Meteo
