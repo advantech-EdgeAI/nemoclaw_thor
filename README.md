@@ -2,30 +2,7 @@
 
 Install NemoClaw on a native NVIDIA Jetson AGX Thor Developer Kit, use local Ollama inference, and connect a sandbox to Telegram.
 
-This guide uses:
-
-```text
-Ollama model: qwen3.6:35b
-Sandbox name: my-assistant
-```
-
-## 1. Install Ollama
-
-Verify the device:
-
-```bash
-uname -m
-cat /etc/os-release
-```
-
-Expected shape:
-
-```text
-aarch64
-Ubuntu 24.04.x LTS
-```
-
-Install prerequisites and Ollama:
+## 1. Install prerequisites and Ollama
 
 ```bash
 sudo apt update
@@ -39,31 +16,14 @@ Start and verify the service:
 sudo systemctl enable --now ollama
 command -v ollama
 ollama --version
-systemctl is-active ollama
-curl -fsS http://127.0.0.1:11434/api/tags | jq .
 ```
 
-On the reference Thor device:
+## 2. Download, Run and Verify the Local Model
 
-```text
-/usr/local/bin/ollama
-ollama version is 0.30.7
-active
-```
-
-## 2. Download or Verify the Local Model
-
-This guide uses `qwen3.6:35b`:
+Download and Run. This guide uses `qwen3.6:35b`:
 
 ```bash
 export OLLAMA_MODEL=qwen3.6:35b
-ollama pull "$OLLAMA_MODEL"
-ollama list | grep "$OLLAMA_MODEL"
-```
-
-Quick test:
-
-```bash
 ollama run "$OLLAMA_MODEL"
 ```
 
@@ -74,7 +34,13 @@ Say hello from Jetson Thor in one sentence.
 /bye
 ```
 
-HTTP API test:
+Quick test: Query Modles
+```bash
+curl -fsS http://127.0.0.1:11434/api/tags | jq .
+```
+
+
+HTTP API test: Chat Testing
 
 ```bash
 curl -s http://127.0.0.1:11434/api/generate \
@@ -86,25 +52,15 @@ curl -s http://127.0.0.1:11434/api/generate \
   }" | jq .
 ```
 
-For the smaller model used in earlier tests, replace `qwen3.6:35b` with `qwen3.6:25b`.
+## 3. Create a Telegram Bot to get Bot Token and User ID, for pairing later at Step 4.
 
-## 3. Create a Telegram Bot and get user ID
-
-The Sequence:
-```
-1. Create a Telegram bot with @BotFather
-2. Copy the bot token
-3. Get your personal numeric user ID from @userinfobot
-4. Enter both into nemoclaw onboard
-```
-
-In Telegram, open the official BotFather:
+### In Telegram, Search and Open the official BotFather:
 
 ```text
 @BotFather
 ```
 
-Create a bot:
+Create a bot
 
 ```text
 /newbot
@@ -116,102 +72,74 @@ BotFather returns a token like:
 1234567890:AAExampleTokenString_DoNotCommitRealTokens
 ```
 
-Set the token only in your shell:
+Then Set the token in your shell:
 
 ```bash
 export TELEGRAM_BOT_TOKEN='PASTE_YOUR_BOT_TOKEN_HERE'
 ```
 
-Verify the token and save the bot ID:
-
-```bash
-curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" | jq .
-export TELEGRAM_BOT_ID="$(curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" | jq -r '.result.id')"
-echo "$TELEGRAM_BOT_ID"
-```
-
-`TELEGRAM_BOT_ID` identifies the bot itself. Do not use it as the allowed user or message target.
-
-From your real Telegram account, send `/start` to the bot. Then get your human Telegram user ID.
-
-The simplest way is to ask Telegram's user-info bot:
+### In Telegram, Search and Open the official UserInfo:
 
 ```text
 @userinfobot
 ```
 
-You can also get the ID from the bot update stream:
+Send start to bot to get your ID
 
-```bash
-curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates" \
-  | jq '.result[]
-        | select(.message.from.is_bot == false)
-        | .message.from
-        | {id, username, first_name}'
+```text
+/start
 ```
 
-Save your human user ID:
+Then Set the User ID in your shell:
 
 ```bash
 export TELEGRAM_USER_ID='PASTE_YOUR_HUMAN_TELEGRAM_USER_ID_HERE'
 ```
 
-Use a dedicated bot token for this NemoClaw sandbox. Reusing one token in multiple bot services can cause:
-
-```text
-Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
-```
-
 ## 4. Install and Configure NemoClaw
 
-Set the sandbox name:
+### Install NemoClaw:
 
-```bash
-export NEMOCLAW_SANDBOX_NAME=my-assistant
-```
-
-Install NemoClaw:
-
-```bash
-curl -fsSL https://www.nvidia.com/nemoclaw.sh | \
-  bash -s -- --yes-i-accept-third-party-software
-```
-
-From this repository checkout, the local bootstrap script is also available:
+From this repository checkout, the NemoClaw install script is available:
 
 ```bash
 ./install_nemoclaw.sh --yes-i-accept-third-party-software
 ```
 
-Run onboarding:
+### After installation done, run onboarding:
 
 ```bash
-nemoclaw onboard
-```
+NEMOCLAW_RECREATE_WITHOUT_BACKUP=1 nemoclaw onboard
 
-Choose:
+... [3/8]
+Select your inference provider: 
+7) Local Ollama ...
 
-```text
-Provider: local Ollama / ollama-local
-Model: qwen3.6:35b
-Sandbox name: my-assistant
-```
+Ollama models:
+17) Other...
 
-For an existing install, set the inference route directly:
+Choose model [1]: 17
+Ollama model id: qwen3.6:35b
 
-```bash
-nemoclaw inference set \
-  --provider ollama-local \
-  --model qwen3.6:35b \
-  --sandbox "$NEMOCLAW_SANDBOX_NAME"
+... [4/8]
+Sandbox name ... [hermes]:
+
+... [5/8]
+[1] * telegram - Telegram bot messaging
+Telegram Bot Toekn: <Bot Token>
+Telegram User ID (for DM access): <Your User ID>
+
+----------------
+Hermes is ready
+
+Sandbox: hermes
+Model: qwen3.6:35b (Local Ollama)
+
 ```
 
 Verify:
-
 ```bash
-nemoclaw inference get --json
 nemoclaw "$NEMOCLAW_SANDBOX_NAME" status
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" doctor --json
 ```
 
 Expected inference route:
@@ -225,168 +153,16 @@ Expected inference route:
 
 ## 5. Apply Basic Network Policies
 
-The bundled policy files are required for a useful base setup:
-
-- `openclaw-local-gateway.yaml`: allows OpenClaw and Node inside the sandbox to reach the local OpenClaw gateway WebSocket.
-- `weather-apis.yaml`: allows weather tools to call `wttr.in`, Open-Meteo, and `weather.gov`.
-
-Preview and apply:
-
 ```bash
-ls -l nemoclaw_thor/policies/
-
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" policy-add \
-  --from-dir ./nemoclaw_thor/policies \
-  --dry-run
-
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" policy-add \
-  --from-dir ./nemoclaw_thor/policies \
-  --yes
-
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" policy-list
-```
-
-If `policy-list` still shows the built-in weather preset as disabled:
-
-```text
-○ weather — Read-only public weather, geocoding, and alert APIs
-```
-
-Enable it directly:
-
-```bash
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" policy-add weather --yes
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" policy-list
-```
-
-If you need to patch the gateway policy on another Thor device, edit the `host:` entries before applying:
-
-```bash
-sed -n '1,120p' nemoclaw_thor/policies/openclaw-local-gateway.yaml
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" doctor --json | jq .
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" logs --tail 200 | grep -Ei 'gateway|18790|websocket'
-```
-
-Keep port `18790` unless your gateway logs show a different port.
-
-## 6. Connect Telegram
-
-Enable the Telegram channel:
-
-```bash
-export NEMOCLAW_OLLAMA_PROXY_TOKEN="$(cat ~/.nemoclaw/ollama-proxy-token)"
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels list
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels add telegram
-```
-
-When prompted:
-
-- Use `TELEGRAM_BOT_TOKEN` for the bot token.
-- Use `TELEGRAM_USER_ID` for `Telegram User ID (for DM access)`.
-- Use your Telegram group or channel ID only if the flow asks for a group/channel destination.
-- Do not use `TELEGRAM_BOT_ID` as an allowed sender or message target. That is the bot itself.
-
-If you leave `Telegram User ID (for DM access)` empty, the bot requires manual OpenClaw pairing before it can reply to direct messages.
-
-Pair Telegram direct messages:
-
-1. From your real Telegram account, send a message to the bot. Use `/start` or any short test message.
-2. List pending pairing requests:
-
-```bash
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" exec -- \
-  openclaw pairing list --channel telegram --json
-```
-
-3. Approve the pairing code shown by the list command:
-
-```bash
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" exec -- \
-  openclaw pairing approve --channel telegram PAIRING_CODE --notify
-```
-
-4. Confirm the Telegram peer is known:
-
-```bash
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" exec -- \
-  openclaw directory peers list --channel telegram --json
-```
-
-For a Telegram channel or group, add the bot and make it an admin if NemoClaw needs to post messages.
-
-Verify:
-
-```bash
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels list
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" status
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" logs --tail 120
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" dashboard-url
-```
-
-Send a test message to the Telegram bot from the allowed Telegram account or channel. A healthy setup routes the message into NemoClaw/OpenClaw, uses local Ollama `qwen3.6:35b`, and replies through Telegram.
-
-## Troubleshooting
-
-Ollama:
-
-```bash
-sudo systemctl status ollama --no-pager
-journalctl -u ollama -n 100 --no-pager
-ollama list
-ollama ps
-```
-
-NemoClaw:
-
-```bash
-nemoclaw inference get --json
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" doctor --json
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" logs --tail 200
-```
-
-Telegram:
-
-- `Conflict: terminated by other getUpdates request` means another service is polling the same bot token.
-- `403: Forbidden: the bot can't send messages to the bot` means the target ID is the bot ID, not your human Telegram user ID.
-- If Telegram cannot connect, confirm the sandbox has outbound access to `api.telegram.org`.
-- If channel posting fails, confirm the bot is a member or admin of the target Telegram channel or group.
-- If direct messages do not work, set `TELEGRAM_USER_ID` during `channels add telegram` or complete the OpenClaw pairing flow.
-- If `channels add` or `channels remove` fails during rebuild with `NEMOCLAW_OLLAMA_PROXY_TOKEN` missing, export the saved local Ollama proxy token first:
-
-```bash
-export NEMOCLAW_OLLAMA_PROXY_TOKEN="$(cat ~/.nemoclaw/ollama-proxy-token)"
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels remove telegram
-nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels add telegram
-```
-
-# NemoClaw OpenClaw Weather Fix Package
-
-Host-side fix package for a fresh NemoClaw + Ollama + OpenClaw setup where:
-
-- OpenClaw exposes `tool_search_code` and the model fails while editing files or using tools.
-- Weather prompts return "network access is blocked" because the bundled weather skill uses `wttr.in`.
-- Ollama tool-result follow-up turns hang or time out through the local auth proxy.
-
-## Quick Apply
-
-From the repository root:
-
-```bash
-./nemoclaw_thor/fix-weather-tools/apply.sh my-assistant
-```
-
-Or use the environment variable:
-
-```bash
-export NEMOCLAW_SANDBOX_NAME=my-assistant
-./nemoclaw_thor/fix-weather-tools/apply.sh
+export NEMOCLAW_SANDBOX_NAME=hermes
+./nemoclaw_thor/fix-weather-tools/apply-hermes.sh "$NEMOCLAW_SANDBOX_NAME"
 ```
 
 The script runs on the host. It will:
 
 - apply the bundled NemoClaw policies;
 - enable the built-in `weather` policy;
-- configure OpenClaw to use structured `tool_search`, `tool_describe`, and `tool_call`;
+- configure Hermes Agent to use structured `tool_search`, `tool_describe`, and `tool_call`;
 - restart the OpenShell sandbox container;
 - install the Open-Meteo weather skill override;
 - install a fixed Ollama auth proxy and restart it;
@@ -395,27 +171,66 @@ The script runs on the host. It will:
 Set `OLLAMA_MODEL` if your local model is not `qwen3.6:35b`:
 
 ```bash
-OLLAMA_MODEL=qwen3.6:25b ./nemoclaw_thor/fix-weather-tools/apply.sh my-assistant
+OLLAMA_MODEL=qwen3.6:25b ./nemoclaw_thor/fix-weather-tools/apply.sh "$NEMOCLAW_SANDBOX_NAME"
 ```
+
+## 6. Connect Telegram
+```bash
+export TELEGRAM_BOT_TOKEN=<Bot Token>
+export TELEGRAM_ALLOWED_IDS=<User ID>
+./nemoclaw_thor/add-telegram-to-nemoclaw-hermes.sh
+```
+
+From your Telegram APP, send a test message to the Telegram bot from the allowed Telegram account or channel. A healthy setup routes the message into NemoClaw/Hermes Agent, uses local Ollama `qwen3.6:35b`, and replies through Telegram.
+
+
+Verify from Host Terminal:
+
+```bash
+nemoclaw "$NEMOCLAW_SANDBOX_NAME" status
+nemoclaw "$NEMOCLAW_SANDBOX_NAME" dashboard-url
+```
+
+
+## Troubleshooting
+
+Telegram:
+
+- `Conflict: terminated by other getUpdates request` means another service is polling the same bot token.
+- `403: Forbidden: the bot can't send messages to the bot` means the target ID is the bot ID, not your human Telegram user ID.
+- If Telegram cannot connect, confirm the sandbox has outbound access to `api.telegram.org`.
+- If channel posting fails, confirm the bot is a member or admin of the target Telegram channel or group.
+- If direct messages do not work, set `TELEGRAM_USER_ID` during `channels add telegram`
+- If `channels add` or `channels remove` fails during rebuild with `NEMOCLAW_OLLAMA_PROXY_TOKEN` missing, export the saved local Ollama proxy token first:
+
+```bash
+nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels remove telegram
+nemoclaw "$NEMOCLAW_SANDBOX_NAME" channels add telegram
+```
+
+# NemoClaw Hermes Agent Weather Fix Package
+
+Host-side fix package for a fresh NemoClaw + Ollama + Hermes Agent setup where:
+
+- Hermes Agent exposes `tool_search_code` and the model fails while editing files or using tools.
+- Weather prompts return "network access is blocked" because the bundled weather skill uses `wttr.in`.
+- Ollama tool-result follow-up turns hang or time out through the local auth proxy.
+
 
 ## Optional End-to-End Smoke
 
 The full agent test can take a while on local models, so it is opt-in:
 
 ```bash
-RUN_AGENT_SMOKE=1 ./nemoclaw_thor/fix-weather-tools/apply.sh my-assistant
+RUN_AGENT_SMOKE=1 ./nemoclaw_thor/fix-weather-tools/apply.sh "$NEMOCLAW_SANDBOX_NAME"
 ```
 
-Expected prompt result: the assistant fetches live Taipei weather from Open-Meteo
-and does not claim that network access is blocked.
+Expected prompt result: the assistant fetches live Taipei weather from Open-Meteo and does not claim that network access is blocked.
 
 ## Files
 
-- `apply.sh`: host-side installer.
-- `ollama-auth-proxy.fixed.js`: replacement local Ollama auth proxy with native
-  `/api/chat` translation for `/v1/chat/completions`.
-- `nemoclaw_weather_open_meteo_skill/SKILL.md`: OpenClaw weather skill override
-  that instructs the assistant to use Open-Meteo.
+- `ollama-auth-proxy.fixed.js`: replacement local Ollama auth proxy with native `/api/chat` translation for `/v1/chat/completions`.
+- `nemoclaw_weather_open_meteo_skill/SKILL.md`: Hermes Agent weather skill override that instructs the assistant to use Open-Meteo.
 
 
 References:

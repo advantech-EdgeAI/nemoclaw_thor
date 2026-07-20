@@ -4,7 +4,7 @@ set -Eeuo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  apply.sh [SANDBOX_NAME]
+  apply-hermes.sh [SANDBOX_NAME]
 
 Environment:
   NEMOCLAW_SANDBOX_NAME  Sandbox name if no argument is provided.
@@ -13,7 +13,7 @@ Environment:
   SKIP_PROXY_PATCH=1     Do not replace/restart the Ollama auth proxy.
 
 Example:
-  ./nemoclaw_thor/fix-weather-tools/apply.sh my-assistant3
+  ./nemoclaw_thor/fix-weather-tools/apply-hermes.sh hermes
 USAGE
 }
 
@@ -53,7 +53,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 SANDBOX_NAME="${1:-${NEMOCLAW_SANDBOX_NAME:-}}"
-[[ -n "$SANDBOX_NAME" ]] || die "provide a sandbox name, for example: apply.sh my-assistant3"
+[[ -n "$SANDBOX_NAME" ]] || die "provide a Hermes sandbox name, for example: apply-hermes.sh hermes"
 OLLAMA_MODEL="${OLLAMA_MODEL:-qwen3.6:35b}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -67,53 +67,55 @@ PROXY_PID_FILE="${HOME}/.nemoclaw/ollama-auth-proxy.pid"
 PROXY_LOG="/tmp/nemoclaw-ollama-auth-proxy.log"
 
 need_cmd nemoclaw
-need_cmd docker
+need_cmd openshell
 need_cmd curl
 need_cmd node
+need_cmd setsid
 
 [[ -d "$POLICY_DIR" ]] || die "policy directory not found: $POLICY_DIR"
 [[ -d "$SKILL_DIR" ]] || die "weather skill directory not found: $SKILL_DIR"
 
 log "Using sandbox: ${SANDBOX_NAME}"
 nemoclaw "$SANDBOX_NAME" status >/dev/null
+nemoclaw "$SANDBOX_NAME" exec -- sh -c \
+  'test -f /sandbox/.hermes/config.yaml && command -v hermes >/dev/null' \
+  || die "sandbox '${SANDBOX_NAME}' is not a configured Hermes sandbox"
 
 log "Applying NemoClaw network policies"
 nemoclaw "$SANDBOX_NAME" policy-add --from-dir "$POLICY_DIR" --yes
 nemoclaw "$SANDBOX_NAME" policy-add weather --yes || warn "built-in weather policy could not be enabled; continuing with bundled policy files"
 
-log "Configuring OpenClaw structured tool search"
-structured_tool_search_script='
-const fs = require("fs");
-const crypto = require("crypto");
-const paths = [
-  "/sandbox/.openclaw/openclaw.json",
-  "/sandbox/.openclaw/openclaw.json.last-good",
-];
-for (const p of paths) {
-  const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
-  cfg.tools = cfg.tools && typeof cfg.tools === "object" ? cfg.tools : {};
-  cfg.tools.toolSearch = { enabled: true, mode: "tools" };
-  fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + "\n", {
-    mode: p.endsWith("last-good") ? 0o600 : 0o660,
-  });
-}
-const current = fs.readFileSync("/sandbox/.openclaw/openclaw.json");
-const hash = crypto.createHash("sha256").update(current).digest("hex");
-fs.writeFileSync("/sandbox/.openclaw/.config-hash", `${hash}  openclaw.json\n`, { mode: 0o660 });
-'
-sandbox_exec_script node "$structured_tool_search_script"
-
-log "Installing Open-Meteo weather skill override"
+log "Installing Open-Meteo weather skill for Hermes"
 nemoclaw "$SANDBOX_NAME" skill install "$SKILL_DIR"
 
-log "Restarting OpenShell sandbox container"
-container_name="$(docker ps --format '{{.Names}}' | grep -F "openshell-${SANDBOX_NAME}-" | head -n 1 || true)"
-if [[ -n "$container_name" ]]; then
-  docker restart "$container_name" >/dev/null
-else
-  warn "could not find running container matching openshell-${SANDBOX_NAME}-; skip docker restart"
+log "Restarting Hermes gateway and restoring dashboard forwarding"
+nemoclaw "$SANDBOX_NAME" recover
+
+dashboard_url="$(nemoclaw "$SANDBOX_NAME" dashboard-url --quiet)"
+dashboard_port="$(node -e 'process.stdout.write(new URL(process.argv[1]).port)' "$dashboard_url")"
+[[ -n "$dashboard_port" ]] || die "could not determine Hermes dashboard port from dashboard-url"
+
+if ! curl -fsS --max-time 10 "$dashboard_url" >/dev/null; then
+  warn "dashboard forward is not reachable; recreating port ${dashboard_port}"
+  forward_log="/tmp/nemoclaw-${SANDBOX_NAME}-dashboard-forward.log"
+  setsid -f openshell forward start --background "$dashboard_port" "$SANDBOX_NAME" \
+    </dev/null >"$forward_log" 2>&1
+
+  dashboard_ready=0
+  for _ in {1..10}; do
+    sleep 1
+    if curl -fsS --max-time 5 "$dashboard_url" >/dev/null; then
+      dashboard_ready=1
+      break
+    fi
+  done
+  if [[ "$dashboard_ready" != "1" ]]; then
+    tail -n 40 "$forward_log" >&2 || true
+    die "failed to recreate Hermes dashboard forward on port ${dashboard_port}"
+  fi
 fi
-nemoclaw "$SANDBOX_NAME" status >/dev/null
+curl -fsS --max-time 10 "$dashboard_url" >/dev/null \
+  || die "Hermes dashboard is not reachable at ${dashboard_url}"
 
 if [[ "${SKIP_PROXY_PATCH:-0}" != "1" ]]; then
   log "Installing fixed Ollama auth proxy"
@@ -186,16 +188,14 @@ curl -fsS "https://api.open-meteo.com/v1/forecast?latitude=25.05306&longitude=12
 '
 sandbox_exec_script /usr/bin/sh "$open_meteo_check_script"
 
-log "Checking OpenClaw weather skill is installed"
-nemoclaw "$SANDBOX_NAME" exec -- openclaw skills list | grep -i weather || warn "weather skill was not visible in openclaw skills list"
+log "Checking Hermes weather skill is installed"
+nemoclaw "$SANDBOX_NAME" exec -- hermes skills list | grep -i weather \
+  || warn "weather skill was not visible in hermes skills list"
 
 if [[ "${RUN_AGENT_SMOKE:-0}" == "1" ]]; then
-  log "Running end-to-end weather agent smoke"
-  nemoclaw "$SANDBOX_NAME" agent \
-    --message "please get me the current weather of Taipei City" \
-    --session-key agent:main:weather-smoke \
-    --json \
-    --timeout 240
+  log "Running end-to-end Hermes weather agent smoke"
+  nemoclaw "$SANDBOX_NAME" exec --timeout 240 -- \
+    hermes --oneshot "please get me the current weather of Taipei City"
 else
   log "Skipping slow agent smoke; set RUN_AGENT_SMOKE=1 to run it"
 fi
